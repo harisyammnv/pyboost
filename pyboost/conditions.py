@@ -1,11 +1,16 @@
-'''
-Ideally, this class should be a general class function.
-For now, we assume all condition function is simply a numeric comparison on one specific feature.
-'''
+"""
+.. module:: conditions
+"""
 
 
-class Condition:
+class SplitCondition:
+    """Split instances to two groups using a threshold value on a specific index
+    """
     def __init__(self, index, split_val):
+        """
+        :param index: the feature index to be used for splitting
+        :param split_val: the threshold for splitting
+        """
         self.index = index
         self.val = split_val
         self.result = None
