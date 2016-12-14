@@ -2,6 +2,7 @@
 .. model:: controllers
 """
 import numpy as np
+from operator import add
 
 from adtree import SplitterNode
 from conditions import TrueCondition
@@ -17,10 +18,10 @@ def adaboost_adjust_weight(instances, splitter_node):
     :param splitter: a node in the alternating decision tree, representing the new learner
     :returns: a new RDD of the instances with adjusted weights
     """
-    bc_splitter = sc.broadcast(splitter_node)
+    # TODO: may need to broadcast the splitter_node
     return instances.map(
         lambda (y, X, weight): (
-            y, X, weight * np.exp(-bc_splitter.value.predict(X, pre_check=False) * y)
+            y, X, weight * np.exp(-splitter_node.predict(X, pre_check=False) * y)
         )
     )
 
@@ -33,11 +34,11 @@ def run_adaboost_adtree(y, X, T=10):
     :returns: An array of ADTree nodes with its first element to be the tree root
     """
     # Setup the root of the ADTree
-    pos_count = y.filter(lambda y: safe_comp(y, 0.0) > 0).count()
-    neg_count = y.filter(lambda y: safe_comp(y, 0.0) < 0).count()
+    pos_count = y.filter(lambda y: safe_comp(y, 0.0) > 0).count() + 1
+    neg_count = y.filter(lambda y: safe_comp(y, 0.0) < 0).count() + 1
     pred_val = 0.5 * np.log(1.0 * pos_count / neg_count)
-    root_node = SplitterNode(None, True, TrueCondition())
-    root_node.set_predict(pred_val, 0.0)
+    root_node = SplitterNode(0, None, True, TrueCondition())
+    root_node.set_predicts(pred_val, 0.0)
 
     # Setup instances RDD
     instances = y.zip(X).map(lambda (y, X): (y, X, np.exp(-y * pred_val))).cache()
@@ -47,7 +48,21 @@ def run_adaboost_adtree(y, X, T=10):
     for iteration in range(T):
         # next split
         prt_node, onleft, cond = partition_greedy_split(root_node, instances, lossfunc_adtree)
-        new_node = SplitterNode(prt_node, onleft, cond)
+        # Spark will deep copy the instance, so `prt_node` above is actually a copy
+        # rather than a reference
+        prt_node = nodes[prt_node.index]
+        new_node = SplitterNode(len(nodes), prt_node, onleft, cond)
+        # Set the predictions of the new node
+        predicts = (
+            instances.map(lambda (y, X, w): ((new_node.check(X), safe_comp(y)), w))
+                     .filter(lambda ((predict, label), w): predict is not None)
+                     .reduceByKey(add)
+                     .mapValues(lambda w: w + 1.0)
+                     .collectAsMap()
+        )
+        lpred = 0.5 * np.log(1.0 * predicts[(True, 1)] / predicts[(True, -1)])
+        rpred = 0.5 * np.log(1.0 * predicts[(False, 1)] / predicts[(False, -1)])
+        new_node.set_predicts(lpred, rpred)
         # add new node to the ADTree
         prt_node.add_child(onleft, new_node)
         nodes.append(new_node)

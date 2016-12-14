@@ -15,9 +15,12 @@ class ThresholdCondition:
         self.val = split_val
         self.result = None
 
+    def __call__(self, instance):
+        return self.check(instance)
+
     def check(self, instance):
         """Check whether an instance satisfies the condition"""
-        r = (safe_comp(self.instance[self.index], self.val) <= 0)
+        r = (safe_comp(instance[self.index], self.val) <= 0)
         if self.result is not None:
             return r == self.result
         return r
@@ -32,5 +35,11 @@ class TrueCondition:
     def __init__(self):
         pass
 
+    def __call__(self, instance):
+        return self.check(instance)
+
     def check(self, instance):
         return True
+
+    def set_result(self, result):
+        pass

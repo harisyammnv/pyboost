@@ -2,6 +2,7 @@
 .. module:: learners
 """
 from collections import deque
+from operator import itemgetter
 
 from conditions import ThresholdCondition
 from utils import safe_comp
@@ -24,6 +25,7 @@ def partition_greedy_split(adtree_root, instances, loss_func):
         r_threshold = None
         r_onleft = None
 
+        insts = list(insts)
         tot_weight = sum(map(itemgetter(2), insts))
         sorted_insts = sorted(insts, key=lambda (y, X, weight): X[split_index])
         queue = deque()
@@ -34,8 +36,8 @@ def partition_greedy_split(adtree_root, instances, loss_func):
             right_insts = [t for t in data if not node.check(t[1])]
 
             # find a best split threshold on this node
-            for insts in [left_insts, right_insts]:
-                onleft = (insts == left_insts)
+            for _loop, insts in enumerate([left_insts, right_insts]):
+                onleft = (_loop == 0)
                 tot_pos = sum(map(itemgetter(2),
                                   filter(lambda t: safe_comp(t[0], 0.0) > 0,
                                          insts)))
@@ -66,13 +68,14 @@ def partition_greedy_split(adtree_root, instances, loss_func):
             for child in node.rchild:
                 queue.append((child, right_insts))
 
-        return min_score, (r_node, r_onleft, ThresholdCondition(split_index, r_threshold))
+        yield (min_score, (r_node, r_onleft, ThresholdCondition(split_index, r_threshold)))
 
     _, X, _ = instances.first()
     feature_size = X.size
-    inst_sets = instances.repartition(feature_size).glom()
+    assert(instances.count() >= feature_size)
+    inst_sets = instances.repartition(feature_size)
     # TODO: may need to broadcast the whole ADTree
     _, (best_node, best_onleft, best_cond) = (
-        inst_sets.mapPartitionsWithIndex(pgs_find_best_split).min()
+        inst_sets.mapPartitionsWithIndex(pgs_find_best_split).min(itemgetter(0))
     )
     return best_node, best_onleft, best_cond
