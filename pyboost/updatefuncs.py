@@ -18,7 +18,7 @@ def adaboost_update(instances, splitter_node):
             y, X, weight * np.exp(-splitter_node.predict(X, pre_check=False) * y)
         )
     ).cache()
-    w_sum = 1.0  # raw.map(itemgetter(2)).sum()
+    w_sum = raw.map(itemgetter(2)).sum()
     return raw.map(lambda (y, X, weight): (y, X, weight / w_sum))
 
 
@@ -35,5 +35,5 @@ def logitboost_update(instances, splitter_node):
             y, X, weight / (1.0 + np.exp(splitter_node.predict(X, pre_check=False) * y))
         )
     ).cache()
-    w_sum = 1.0  # raw.map(itemgetter(2)).sum()
+    w_sum = raw.map(itemgetter(2)).sum()
     return raw.map(lambda (y, X, weight): (y, X, weight / w_sum))
