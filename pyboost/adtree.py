@@ -55,11 +55,13 @@ class SplitterNode:
         else:
             self.rchild.append(new_node)
 
-    def run(self, instance, quiet=True):
+    def run(self, instance, max_index=None, quiet=True):
         """Iterate an instance in the subtree rooted at this splitter node.
 
         .. note:: The pre-conditions are assumed to be satisfied.
         """
+        if max_index is not None and self.index > max_index:
+            return 0.0
         if self.cond(instance):
             score = self.lpredict
             child = self.lchild
@@ -71,5 +73,5 @@ class SplitterNode:
             if not quiet:
                 print "go to right child, score:", score
         for c in child:
-            score += c.run(instance)
+            score += c.run(instance, max_index, quiet)
         return score

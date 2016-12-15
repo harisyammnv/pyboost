@@ -2,13 +2,15 @@
 .. module:: learners
 """
 from collections import deque
+from numpy.random import randint
+from numpy import inf
 from operator import itemgetter
 
 from conditions import ThresholdCondition
 from utils import safe_comp
 
 
-def partition_greedy_split(adtree_root, instances, loss_func):
+def partition_greedy_split(adtree_root, instances, loss_func, quiet=True):
     """Find the best split from all existing tree nodes and split points
 
     .. seealso:: conditions.ThresholdCondition
@@ -19,8 +21,13 @@ def partition_greedy_split(adtree_root, instances, loss_func):
     :returns: a (split_node, split_onleft, split_condition) pair for the best split
     """
 
+    _, X, _ = instances.first()
+    feature_size = X.size
+    shift = randint(feature_size)
+
     def pgs_find_best_split(split_index, insts):
-        min_score = None
+        split_index = (split_index + shift) % feature_size
+        min_score = inf
         r_node = None
         r_threshold = None
         r_onleft = None
@@ -28,6 +35,7 @@ def partition_greedy_split(adtree_root, instances, loss_func):
         insts = list(insts)
         tot_weight = sum(map(itemgetter(2), insts))
         sorted_insts = sorted(insts, key=lambda (y, X, weight): X[split_index])
+        # TODO: use regular list to replace deque
         queue = deque()
         queue.append((adtree_root, sorted_insts))
         while len(queue):
@@ -47,16 +55,15 @@ def partition_greedy_split(adtree_root, instances, loss_func):
                 rej = tot_weight - tot_pos - tot_neg
                 left_pos = 0.0
                 left_neg = 0.0
-                cur_best = None
                 for i in range(len(insts) - 1):
                     y, X, w = insts[i]
                     left_pos += (safe_comp(y, 0.0) > 0) * w
                     left_neg += (safe_comp(y, 0.0) < 0) * w
-                    if X[split_index] != insts[i + 1][1][split_index]:
+                    if safe_comp(X[split_index], insts[i + 1][1][split_index]):
                         right_pos = tot_pos - left_pos
                         right_neg = tot_neg - left_neg
                         score = loss_func(rej, left_pos, left_neg, right_pos, right_neg)
-                        if min_score is None or safe_comp(score, min_score) < 0:
+                        if safe_comp(score, min_score) < 0:
                             min_score = score
                             r_node = node
                             r_threshold = X[split_index]
@@ -70,12 +77,14 @@ def partition_greedy_split(adtree_root, instances, loss_func):
 
         yield (min_score, (r_node, r_onleft, ThresholdCondition(split_index, r_threshold)))
 
-    _, X, _ = instances.first()
-    feature_size = X.size
     assert(instances.count() >= feature_size)
     inst_sets = instances.repartition(feature_size)
+    splits = inst_sets.mapPartitionsWithIndex(pgs_find_best_split).cache()
+    if not quiet:
+        idx_score = []
+        for score, (_, _, cond) in splits.collect():
+            idx_score.append((cond.index, score))
+        print "Score (sorted by index):", list(map(itemgetter(1), sorted(idx_score)))
     # TODO: may need to broadcast the whole ADTree
-    _, (best_node, best_onleft, best_cond) = (
-        inst_sets.mapPartitionsWithIndex(pgs_find_best_split).min(itemgetter(0))
-    )
+    _, (best_node, best_onleft, best_cond) = splits.min(itemgetter(0))
     return best_node, best_onleft, best_cond

@@ -26,7 +26,7 @@ def adaboost_adjust_weight(instances, splitter_node):
     )
 
 
-def run_adaboost_adtree(y, X, T=10):
+def run_adaboost_adtree(y, X, T=10, quiet=True):
     """Train a ADTree using AdaBoost
 
     :param y: the RDD of the instance labels
@@ -46,8 +46,12 @@ def run_adaboost_adtree(y, X, T=10):
     # Iteratively grow the ADTree
     nodes = [root_node]
     for iteration in range(T):
+        if not quiet:
+            print '=' * 3, "Iteration %d" % (iteration + 1), '=' * 3
         # next split
-        prt_node, onleft, cond = partition_greedy_split(root_node, instances, lossfunc_adtree)
+        prt_node, onleft, cond = partition_greedy_split(
+            root_node, instances, lossfunc_adtree, quiet=quiet
+        )
         # Spark will deep copy the instance, so `prt_node` above is actually a copy
         # rather than a reference
         prt_node = nodes[prt_node.index]
@@ -62,6 +66,17 @@ def run_adaboost_adtree(y, X, T=10):
         )
         lpred = 0.5 * np.log(1.0 * predicts[(True, 1)] / predicts[(True, -1)])
         rpred = 0.5 * np.log(1.0 * predicts[(False, 1)] / predicts[(False, -1)])
+        if not quiet:
+            print "Purity (farther from 1.0 is better):",
+            print (1.0 * predicts[(True, 1)] / predicts[(True, -1)],
+                   1.0 * predicts[(False, 1)] / predicts[(False, -1)])
+            print "Predicts (farther from 0.0 is better):", (lpred, rpred)
+            print "Split node:", prt_node.index,
+            if onleft:
+                print "(left)"
+            else:
+                print "(right)"
+            print "Split index and value:", cond.index, cond.val, '\n'
         new_node.set_predicts(lpred, rpred)
         # add new node to the ADTree
         prt_node.add_child(onleft, new_node)
