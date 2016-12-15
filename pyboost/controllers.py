@@ -8,40 +8,28 @@ from adtree import SplitterNode
 from conditions import TrueCondition
 from learners import partition_greedy_split
 from lossfuncs import lossfunc_adtree
+from updatefuncs import adaboost_update
+from updatefuncs import logitboost_update
 from utils import safe_comp
 
 
-def adaboost_adjust_weight(instances, splitter_node):
-    """Adjust the weights of instances after obtaining a new learner (splitter)
-
-    :param instances: the RDD of the instances, each element is a triplet of (y, X, weight)
-    :param splitter: a node in the alternating decision tree, representing the new learner
-    :returns: a new RDD of the instances with adjusted weights
-    """
-    # TODO: may need to broadcast the splitter_node
-    return instances.map(
-        lambda (y, X, weight): (
-            y, X, weight * np.exp(-splitter_node.predict(X, pre_check=False) * y)
-        )
-    )
-
-
-def run_adaboost_adtree(y, X, T=10, quiet=True):
-    """Train a ADTree using AdaBoost
+def _run_adtree(y, X, updatefunc, T, quiet):
+    """Train a ADTree
 
     :param y: the RDD of the instance labels
     :param X: the RDD of the feature vectors of the instances
     :returns: An array of ADTree nodes with its first element to be the tree root
     """
     # Setup the root of the ADTree
-    pos_count = y.filter(lambda y: safe_comp(y, 0.0) > 0).count() + 1
-    neg_count = y.filter(lambda y: safe_comp(y, 0.0) < 0).count() + 1
+    pos_count = y.filter(lambda y: safe_comp(y, 0.0) > 0).count()
+    neg_count = y.filter(lambda y: safe_comp(y, 0.0) < 0).count()
     pred_val = 0.5 * np.log(1.0 * pos_count / neg_count)
     root_node = SplitterNode(0, None, True, TrueCondition())
     root_node.set_predicts(pred_val, 0.0)
 
     # Setup instances RDD
-    instances = y.zip(X).map(lambda (y, X): (y, X, np.exp(-y * pred_val))).cache()
+    instances = y.zip(X).map(lambda (y, X): (y, X, 1.0))
+    instances = updatefunc(instances, root_node).cache()
 
     # Iteratively grow the ADTree
     nodes = [root_node]
@@ -61,7 +49,7 @@ def run_adaboost_adtree(y, X, T=10, quiet=True):
             instances.map(lambda (y, X, w): ((new_node.check(X), safe_comp(y)), w))
                      .filter(lambda ((predict, label), w): predict is not None)
                      .reduceByKey(add)
-                     .mapValues(lambda w: w + 1.0)
+                     .mapValues(lambda w: w)
                      .collectAsMap()
         )
         lpred = 0.5 * np.log(1.0 * predicts[(True, 1)] / predicts[(True, -1)])
@@ -82,6 +70,14 @@ def run_adaboost_adtree(y, X, T=10, quiet=True):
         prt_node.add_child(onleft, new_node)
         nodes.append(new_node)
         # adjust the instances weight
-        instances = adaboost_adjust_weight(instances, new_node).cache()
+        instances = updatefunc(instances, new_node).cache()
     # Return the ADTree
     return nodes
+
+
+def run_adtree_adaboost(y, X, T=10, quiet=True):
+    return _run_adtree(y, X, adaboost_update, T, quiet)
+
+
+def run_adtree_logitboost(y, X, T=10, quiet=True):
+    return _run_adtree(y, X, logitboost_update, T, quiet)
