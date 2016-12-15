@@ -46,7 +46,7 @@ def _run_adtree(y, X, updatefunc, T, quiet):
         new_node = SplitterNode(len(nodes), prt_node, onleft, cond)
         # Set the predictions of the new node
         predicts = (
-            instances.map(lambda (y, X, w): ((new_node.check(X), safe_comp(y)), w))
+            instances.map(lambda (y, X, w): ((new_node.check(X, pre_check=False), safe_comp(y)), w))
                      .filter(lambda ((predict, label), w): predict is not None)
                      .reduceByKey(add)
                      .mapValues(lambda w: w)
