@@ -43,8 +43,12 @@ def partition_greedy_split(sc, nodes, instances, loss_func, root_index=0, quiet=
             node_index, data = queue[ptr]
             node = bc_nodes.value[node_index]
             ptr = ptr + 1
-            left_insts = [t for t in data if node.check(t[1])]
-            right_insts = [t for t in data if not node.check(t[1])]
+            left_insts, right_insts = [], []
+            for t in data:
+                if node.check(t[1]):
+                    left_insts.append(t)
+                else:
+                    right_insts.append(t)
 
             # find a best split threshold on this node
             for _loop, insts in enumerate([left_insts, right_insts]):
@@ -80,10 +84,7 @@ def partition_greedy_split(sc, nodes, instances, loss_func, root_index=0, quiet=
 
         yield (min_score, (r_node, r_onleft, ThresholdCondition(split_index, r_threshold)))
 
-    # TODO: add this assert back later
-    # assert(instances.count() >= feature_size)
-    inst_sets = instances.repartition(feature_size)
-    splits = inst_sets.mapPartitionsWithIndex(pgs_find_best_split).cache()
+    splits = instances.mapPartitionsWithIndex(pgs_find_best_split).cache()
     if not quiet:
         idx_score = []
         for score, (_, _, cond) in splits.collect():

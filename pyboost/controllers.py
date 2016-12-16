@@ -29,7 +29,8 @@ def _run_adtree(sc, y, X, updatefunc, T, quiet):
     root_node.set_predicts(pred_val, 0.0)
 
     # Setup instances RDD
-    instances = y.zip(X).map(lambda (y, X): (y, X, 1.0))
+    feature_size = X.first().size
+    instances = y.zip(X).map(lambda (y, X): (y, X, 1.0)).repartition(feature_size)
     instances = updatefunc(instances, root_node).cache()
 
     # Iteratively grow the ADTree
