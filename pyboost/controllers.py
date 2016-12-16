@@ -11,9 +11,10 @@ from lossfuncs import lossfunc_adtree
 from updatefuncs import adaboost_update
 from updatefuncs import logitboost_update
 from utils import safe_comp
+from utils import Timer
 
 
-def _run_adtree(y, X, updatefunc, T, quiet):
+def _run_adtree(sc, y, X, updatefunc, T, quiet):
     """Train a ADTree
 
     :param y: the RDD of the instance labels
@@ -33,13 +34,16 @@ def _run_adtree(y, X, updatefunc, T, quiet):
 
     # Iteratively grow the ADTree
     nodes = [root_node]
+    timer = Timer()
     for iteration in range(T):
+        timer.stamp("[run_adtree] Iteration " + str(iteration) + " starts.")
         if not quiet:
             print '=' * 3, "Iteration %d" % (iteration + 1), '=' * 3
         # next split
         prt_node, onleft, cond = partition_greedy_split(
-            root_node, instances, lossfunc_adtree, quiet=quiet
+            sc, nodes, instances, lossfunc_adtree, quiet=quiet
         )
+        timer.stamp("[run_adtree] Found best split.")
         # Spark will deep copy the instance, so `prt_node` above is actually a copy
         # rather than a reference
         prt_node = nodes[prt_node.index]
@@ -54,6 +58,7 @@ def _run_adtree(y, X, updatefunc, T, quiet):
         )
         lpred = 0.5 * np.log(1.0 * predicts[(True, 1)] / predicts[(True, -1)])
         rpred = 0.5 * np.log(1.0 * predicts[(False, 1)] / predicts[(False, -1)])
+        timer.stamp("[run_adtree] Obtained the predictions of the new split.")
         if not quiet:
             print "Purity (farther from 1.0 is better):",
             print (1.0 * predicts[(True, 1)] / predicts[(True, -1)],
@@ -67,17 +72,22 @@ def _run_adtree(y, X, updatefunc, T, quiet):
             print "Split index and value:", cond.index, cond.val, '\n'
         new_node.set_predicts(lpred, rpred)
         # add new node to the ADTree
-        prt_node.add_child(onleft, new_node)
+        prt_node.add_child(onleft, len(nodes))
         nodes.append(new_node)
         # adjust the instances weight
         instances = updatefunc(instances, new_node).cache()
+        timer.stamp("[run_adtree] Instance weights updated.")
+    if not quiet:
+        print "== Timer Log =="
+        timer.print_all()
+        print
     # Return the ADTree
     return nodes
 
 
-def run_adtree_adaboost(y, X, T=10, quiet=True):
-    return _run_adtree(y, X, adaboost_update, T, quiet)
+def run_adtree_adaboost(sc, y, X, T=10, quiet=True):
+    return _run_adtree(sc, y, X, adaboost_update, T, quiet)
 
 
-def run_adtree_logitboost(y, X, T=10, quiet=True):
-    return _run_adtree(y, X, logitboost_update, T, quiet)
+def run_adtree_logitboost(sc, y, X, T=10, quiet=True):
+    return _run_adtree(sc, y, X, logitboost_update, T, quiet)

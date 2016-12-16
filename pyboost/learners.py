@@ -1,7 +1,6 @@
 """
 .. module:: learners
 """
-from collections import deque
 from numpy.random import randint
 from numpy import inf
 from operator import itemgetter
@@ -10,12 +9,13 @@ from conditions import ThresholdCondition
 from utils import safe_comp
 
 
-def partition_greedy_split(adtree_root, instances, loss_func, quiet=True):
+def partition_greedy_split(sc, nodes, instances, loss_func, root_index=0, quiet=True):
     """Find the best split from all existing tree nodes and split points
 
     .. seealso:: conditions.ThresholdCondition
 
-    :param adtree_root: root of the alternating decision tree
+    :param sc: the SparkContext object
+    :param nodes: an array of alternating decision tree nodes, the root index is 0 by default
     :param instances: the RDD of the instances, each element is a triplet of (y, X, weight)
     :param loss_func: the loss function to evaluate the splits
     :returns: a (split_node, split_onleft, split_condition) pair for the best split
@@ -24,6 +24,7 @@ def partition_greedy_split(adtree_root, instances, loss_func, quiet=True):
     _, X, _ = instances.first()
     feature_size = X.size
     shift = randint(feature_size)
+    bc_nodes = sc.broadcast(nodes)
 
     def pgs_find_best_split(split_index, insts):
         split_index = (split_index + shift) % feature_size
@@ -35,11 +36,13 @@ def partition_greedy_split(adtree_root, instances, loss_func, quiet=True):
         insts = list(insts)
         tot_weight = sum(map(itemgetter(2), insts))
         sorted_insts = sorted(insts, key=lambda (y, X, weight): X[split_index])
-        # TODO: use regular list to replace deque
-        queue = deque()
-        queue.append((adtree_root, sorted_insts))
-        while len(queue):
-            node, data = queue.popleft()
+        queue = []
+        queue.append((root_index, sorted_insts))
+        ptr = 0
+        while ptr < len(queue):
+            node_index, data = queue[ptr]
+            node = bc_nodes.value[node_index]
+            ptr = ptr + 1
             left_insts = [t for t in data if node.check(t[1])]
             right_insts = [t for t in data if not node.check(t[1])]
 
@@ -77,7 +80,8 @@ def partition_greedy_split(adtree_root, instances, loss_func, quiet=True):
 
         yield (min_score, (r_node, r_onleft, ThresholdCondition(split_index, r_threshold)))
 
-    assert(instances.count() >= feature_size)
+    # TODO: add this assert back later
+    # assert(instances.count() >= feature_size)
     inst_sets = instances.repartition(feature_size)
     splits = inst_sets.mapPartitionsWithIndex(pgs_find_best_split).cache()
     if not quiet:

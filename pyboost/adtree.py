@@ -1,6 +1,29 @@
 from copy import copy
 
 
+def run_tree(index, nodes, max_index=None, quiet=True):
+    """Iterate an instance in the subtree rooted at this splitter node.
+
+    .. note:: The pre-conditions are assumed to be satisfied.
+    """
+    if max_index is not None and index > max_index:
+        return 0.0
+    node = nodes[index]
+    if node.cond(instance):
+        score = node.lpredict
+        child = node.lchild
+        if not quiet:
+            print "go to left child, score:", score
+    else:
+        score = node.rpredict
+        child = node.rchild
+        if not quiet:
+            print "go to right child, score:", score
+    for c in child:
+        score += run_tree(c, nodes, max_index, quiet)
+    return score
+
+
 class SplitterNode:
     def __init__(self, index, prt, on_left, cond):
         self.index = index
@@ -48,30 +71,9 @@ class SplitterNode:
         self.lpredict = lpredict
         self.rpredict = rpredict
 
-    def add_child(self, onleft, new_node):
+    def add_child(self, onleft, new_node_index):
         """Add a child under this splitter node"""
         if onleft:
-            self.lchild.append(new_node)
+            self.lchild.append(new_node_index)
         else:
-            self.rchild.append(new_node)
-
-    def run(self, instance, max_index=None, quiet=True):
-        """Iterate an instance in the subtree rooted at this splitter node.
-
-        .. note:: The pre-conditions are assumed to be satisfied.
-        """
-        if max_index is not None and self.index > max_index:
-            return 0.0
-        if self.cond(instance):
-            score = self.lpredict
-            child = self.lchild
-            if not quiet:
-                print "go to left child, score:", score
-        else:
-            score = self.rpredict
-            child = self.rchild
-            if not quiet:
-                print "go to right child, score:", score
-        for c in child:
-            score += c.run(instance, max_index, quiet)
-        return score
+            self.rchild.append(new_node_index)
