@@ -26,18 +26,23 @@ def partition_greedy_split(sc, nodes, instances, loss_func, root_index=0, quiet=
     shift = randint(feature_size)
     bc_nodes = sc.broadcast(nodes)
 
-    def pgs_find_best_split(split_index, insts):
-        split_index = (split_index + shift) % feature_size
+    def extract_data(split_index, insts):
+        yield (
+            (split_index + shift) % feature_size,
+            sorted([(t[0], t[1][split_index], t[1], t[2]) for t in insts], key=itemgetter(1))
+        )
+
+    def pgs_find_best_split(data):
+        index, insts = data
+        split_index = (index + shift) % feature_size
         min_score = inf
         r_node = None
         r_threshold = None
         r_onleft = None
 
-        insts = list(insts)
-        tot_weight = sum(map(itemgetter(2), insts))
-        sorted_insts = sorted(insts, key=lambda (y, X, weight): X[split_index])
+        tot_weight = sum(map(itemgetter(3), insts))
         queue = []
-        queue.append((root_index, sorted_insts))
+        queue.append((root_index, insts))
         ptr = 0
         while ptr < len(queue):
             node_index, data = queue[ptr]
@@ -45,7 +50,7 @@ def partition_greedy_split(sc, nodes, instances, loss_func, root_index=0, quiet=
             ptr = ptr + 1
             left_insts, right_insts = [], []
             for t in data:
-                if node.check(t[1]):
+                if node.check(t[2]):
                     left_insts.append(t)
                 else:
                     right_insts.append(t)
@@ -53,20 +58,20 @@ def partition_greedy_split(sc, nodes, instances, loss_func, root_index=0, quiet=
             # find a best split threshold on this node
             for _loop, insts in enumerate([left_insts, right_insts]):
                 onleft = (_loop == 0)
-                tot_pos = sum(map(itemgetter(2),
+                tot_pos = sum(map(itemgetter(3),
                                   filter(lambda t: safe_comp(t[0], 0.0) > 0,
                                          insts)))
-                tot_neg = sum(map(itemgetter(2),
+                tot_neg = sum(map(itemgetter(3),
                                   filter(lambda t: safe_comp(t[0], 0.0) < 0,
                                          insts)))
                 rej = tot_weight - tot_pos - tot_neg
                 left_pos = 0.0
                 left_neg = 0.0
                 for i in range(len(insts) - 1):
-                    y, X, w = insts[i]
+                    y, xi, X, w = insts[i]
                     left_pos += (safe_comp(y, 0.0) > 0) * w
                     left_neg += (safe_comp(y, 0.0) < 0) * w
-                    if safe_comp(X[split_index], insts[i + 1][1][split_index]):
+                    if safe_comp(xi, insts[i + 1][1]):
                         right_pos = tot_pos - left_pos
                         right_neg = tot_neg - left_neg
                         score = loss_func(rej, left_pos, left_neg, right_pos, right_neg)
@@ -84,12 +89,15 @@ def partition_greedy_split(sc, nodes, instances, loss_func, root_index=0, quiet=
 
         yield (min_score, (r_node, r_onleft, ThresholdCondition(split_index, r_threshold)))
 
-    splits = instances.mapPartitionsWithIndex(pgs_find_best_split).cache()
+    splits = (
+        instances.mapPartitionsWithIndex(extract_data)
+                 .map(pgs_find_best_split)
+                 .cache()
+    )
     if not quiet:
         idx_score = []
         for score, (_, _, cond) in splits.collect():
             idx_score.append((cond.index, score))
         print "Score (sorted by index):", list(map(itemgetter(1), sorted(idx_score)))
-    # TODO: may need to broadcast the whole ADTree
     _, (best_node, best_onleft, best_cond) = splits.min(itemgetter(0))
     return best_node, best_onleft, best_cond
