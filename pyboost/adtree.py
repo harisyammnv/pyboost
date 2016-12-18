@@ -1,7 +1,7 @@
 from copy import copy
 
 
-def run_tree(index, nodes, max_index=None, quiet=True):
+def run_tree(index, nodes, instance, max_index=None, quiet=True):
     """Iterate an instance in the subtree rooted at this splitter node.
 
     .. note:: The pre-conditions are assumed to be satisfied.
@@ -20,7 +20,7 @@ def run_tree(index, nodes, max_index=None, quiet=True):
         if not quiet:
             print "go to right child, score:", score
     for c in child:
-        score += run_tree(c, nodes, max_index, quiet)
+        score += run_tree(c, nodes, instance, max_index, quiet)
     return score
 
 

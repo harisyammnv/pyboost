@@ -57,6 +57,13 @@ def _run_adtree(sc, y, X, updatefunc, T, quiet):
                      .mapValues(lambda w: w)
                      .collectAsMap()
         )
+
+        min_val = min([t for t in predicts.values() if t > 0]) * 0.001
+        predicts[(True, 1)] = predicts.get((True, 1), min_val)
+        predicts[(True, -1)] = predicts.get((True, -1), min_val)
+        predicts[(False, 1)] = predicts.get((False, 1), min_val)
+        predicts[(False, -1)] = predicts.get((False, -1), min_val)
+
         lpred = 0.5 * np.log(1.0 * predicts[(True, 1)] / predicts[(True, -1)])
         rpred = 0.5 * np.log(1.0 * predicts[(False, 1)] / predicts[(False, -1)])
         timer.stamp("[run_adtree] Obtained the predictions of the new split.")

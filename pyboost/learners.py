@@ -26,15 +26,15 @@ def partition_greedy_split(sc, nodes, instances, loss_func, root_index=0, quiet=
     shift = randint(feature_size)
     bc_nodes = sc.broadcast(nodes)
 
-    def extract_data(split_index, insts):
+    def extract_data(index, insts):
+        split_index = (index + shift) % feature_size
         yield (
-            (split_index + shift) % feature_size,
+            split_index,
             sorted([(t[0], t[1][split_index], t[1], t[2]) for t in insts], key=itemgetter(1))
         )
 
     def pgs_find_best_split(data):
-        index, insts = data
-        split_index = (index + shift) % feature_size
+        split_index, insts = data
         min_score = inf
         r_node = None
         r_threshold = None
@@ -87,7 +87,7 @@ def partition_greedy_split(sc, nodes, instances, loss_func, root_index=0, quiet=
             for child in node.rchild:
                 queue.append((child, right_insts))
 
-        yield (min_score, (r_node, r_onleft, ThresholdCondition(split_index, r_threshold)))
+        return (min_score, (r_node, r_onleft, ThresholdCondition(split_index, r_threshold)))
 
     splits = (
         instances.mapPartitionsWithIndex(extract_data)
@@ -99,5 +99,7 @@ def partition_greedy_split(sc, nodes, instances, loss_func, root_index=0, quiet=
         for score, (_, _, cond) in splits.collect():
             idx_score.append((cond.index, score))
         print "Score (sorted by index):", list(map(itemgetter(1), sorted(idx_score)))
-    _, (best_node, best_onleft, best_cond) = splits.min(itemgetter(0))
+    min_score, (best_node, best_onleft, best_cond) = splits.min(itemgetter(0))
+    if not quiet:
+        print "Min score:", min_score
     return best_node, best_onleft, best_cond
