@@ -83,6 +83,8 @@ def _run_adtree(sc, y, X, updatefunc, T, quiet):
         nodes.append(new_node)
         # adjust the instances weight
         instances = updatefunc(instances, new_node).cache()
+        if iteration % 10 == 0:
+            instances.checkpoint()
         timer.stamp("[run_adtree] Instance weights updated.")
     if not quiet:
         print "== Timer Log =="
