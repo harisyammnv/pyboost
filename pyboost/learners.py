@@ -34,7 +34,7 @@ def partition_greedy_split(sc, nodes, instances, loss_func, root_index=0, quiet=
         )
 
     def pgs_find_best_split(data):
-        split_index, insts = data
+        index, insts = data
         min_score = inf
         r_node = None
         r_threshold = None
@@ -78,7 +78,7 @@ def partition_greedy_split(sc, nodes, instances, loss_func, root_index=0, quiet=
                         if safe_comp(score, min_score) < 0:
                             min_score = score
                             r_node = node
-                            r_threshold = X[split_index]
+                            r_threshold = xi
                             r_onleft = onleft
 
             # recursively assess the left and right child split nodes
@@ -87,7 +87,7 @@ def partition_greedy_split(sc, nodes, instances, loss_func, root_index=0, quiet=
             for child in node.rchild:
                 queue.append((child, right_insts))
 
-        return (min_score, (r_node, r_onleft, ThresholdCondition(split_index, r_threshold)))
+        return (min_score, (r_node, r_onleft, ThresholdCondition(index, r_threshold)))
 
     splits = (
         instances.mapPartitionsWithIndex(extract_data)
