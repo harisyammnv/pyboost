@@ -54,11 +54,10 @@ def _run_adtree(sc, y, X, updatefunc, T, quiet):
             instances.map(lambda (y, X, w): ((new_node.check(X, pre_check=False), safe_comp(y)), w))
                      .filter(lambda ((predict, label), w): predict is not None)
                      .reduceByKey(add)
-                     .mapValues(lambda w: w)
                      .collectAsMap()
         )
 
-        min_val = min([t for t in predicts.values() if t > 0]) * 0.001
+        min_val = min([t for t in predicts.values() if safe_comp(t) > 0]) * 0.001
         predicts[(True, 1)] = predicts.get((True, 1), min_val)
         predicts[(True, -1)] = predicts.get((True, -1), min_val)
         predicts[(False, 1)] = predicts.get((False, 1), min_val)

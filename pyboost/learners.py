@@ -1,6 +1,7 @@
 """
 .. module:: learners
 """
+import numpy as np
 from numpy.random import randint
 from numpy import inf
 from operator import itemgetter
@@ -48,44 +49,43 @@ def partition_greedy_split(sc, nodes, instances, loss_func, root_index=0, quiet=
             node_index, data = queue[ptr]
             node = bc_nodes.value[node_index]
             ptr = ptr + 1
-            left_insts, right_insts = [], []
-            for t in data:
-                if node.check(t[2]):
-                    left_insts.append(t)
-                else:
-                    right_insts.append(t)
+            check = node.check
+            in_left = [check(t[2]) for t in data]
+            left_insts = [t for t, left in zip(data, in_left) if left]
+            right_insts = [t for t, left in zip(data, in_left) if not left]
 
             # find a best split threshold on this node
             for _loop, insts in enumerate([left_insts, right_insts]):
+                if not insts:
+                    continue
                 onleft = (_loop == 0)
-                tot_pos = sum(map(itemgetter(3),
-                                  filter(lambda t: safe_comp(t[0], 0.0) > 0,
-                                         insts)))
-                tot_neg = sum(map(itemgetter(3),
-                                  filter(lambda t: safe_comp(t[0], 0.0) < 0,
-                                         insts)))
+                tot_w = [(t[3], 0.0) if safe_comp(t[0], 0.0) > 0 else (0.0, t[3]) for t in insts]
+                tot_pos, tot_neg = np.sum(tot_w, axis=0)
                 rej = tot_weight - tot_pos - tot_neg
                 left_pos = 0.0
                 left_neg = 0.0
                 for i in range(len(insts) - 1):
                     y, xi, X, w = insts[i]
-                    left_pos += (safe_comp(y, 0.0) > 0) * w
-                    left_neg += (safe_comp(y, 0.0) < 0) * w
-                    if safe_comp(xi, insts[i + 1][1]):
+                    xi_next = insts[i + 1][1]
+                    if safe_comp(y, 0.0) > 0:
+                        left_pos += w
+                    else:
+                        left_neg += w
+                    if safe_comp(xi, xi_next):
                         right_pos = tot_pos - left_pos
                         right_neg = tot_neg - left_neg
                         score = loss_func(rej, left_pos, left_neg, right_pos, right_neg)
                         if safe_comp(score, min_score) < 0:
                             min_score = score
                             r_node = node
-                            r_threshold = xi
+                            r_threshold = 0.5 * (xi + xi_next)
                             r_onleft = onleft
 
             # recursively assess the left and right child split nodes
-            for child in node.lchild:
-                queue.append((child, left_insts))
-            for child in node.rchild:
-                queue.append((child, right_insts))
+            queue += (
+                [(child, left_insts) for child in node.lchild] +
+                [(child, right_insts) for child in node.rchild]
+            )
 
         return (min_score, (r_node, r_onleft, ThresholdCondition(index, r_threshold)))
 
