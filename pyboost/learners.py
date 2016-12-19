@@ -92,13 +92,7 @@ def partition_greedy_split(sc, nodes, instances, loss_func, root_index=0, quiet=
     splits = (
         instances.mapPartitionsWithIndex(extract_data)
                  .map(pgs_find_best_split)
-                 .cache()
     )
-    if not quiet:
-        idx_score = []
-        for score, (_, _, cond) in splits.collect():
-            idx_score.append((cond.index, score))
-        print "Score (sorted by index):", list(map(itemgetter(1), sorted(idx_score)))
     min_score, (best_node, best_onleft, best_cond) = splits.min(itemgetter(0))
     if not quiet:
         print "Min score:", min_score
