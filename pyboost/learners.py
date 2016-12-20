@@ -89,8 +89,10 @@ def partition_greedy_split(sc, nodes, instances, loss_func, root_index=0, quiet=
 
         return (min_score, (r_node, r_onleft, ThresholdCondition(index, r_threshold)))
 
+    feature_size = instances.first()[1].size
     splits = (
-        instances.mapPartitionsWithIndex(extract_data)
+        instances.repartition(feature_size)
+                 .mapPartitionsWithIndex(extract_data)
                  .map(pgs_find_best_split)
     )
     min_score, (best_node, best_onleft, best_cond) = splits.min(itemgetter(0))
