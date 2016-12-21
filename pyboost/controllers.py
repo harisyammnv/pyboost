@@ -6,6 +6,7 @@ from operator import add
 
 from adtree import SplitterNode
 from conditions import TrueCondition
+from learners import full_greedy_split
 from learners import partition_greedy_split
 from lossfuncs import lossfunc_adtree
 from updatefuncs import adaboost_update
@@ -14,7 +15,7 @@ from utils import safe_comp
 from utils import Timer
 
 
-def _run_adtree(sc, y, X, updatefunc, T, quiet):
+def _run_adtree(sc, y, X, learnerfunc, updatefunc, T, repartition, quiet):
     """Train a ADTree
 
     :param y: the RDD of the instance labels
@@ -41,8 +42,8 @@ def _run_adtree(sc, y, X, updatefunc, T, quiet):
         if not quiet:
             print '=' * 3, "Iteration %d" % (iteration + 1), '=' * 3
         # next split
-        prt_node, onleft, cond = partition_greedy_split(
-            sc, nodes, instances, lossfunc_adtree, quiet=quiet
+        prt_node, onleft, cond = learnerfunc(
+            sc, nodes, instances, lossfunc_adtree, repartition=repartition, quiet=quiet
         )
         timer.stamp("[run_adtree] Found best split.")
         # Spark will deep copy the instance, so `prt_node` above is actually a copy
@@ -94,9 +95,13 @@ def _run_adtree(sc, y, X, updatefunc, T, quiet):
     return nodes
 
 
-def run_adtree_adaboost(sc, y, X, T=10, quiet=True):
-    return _run_adtree(sc, y, X, adaboost_update, T, quiet)
+def run_adtree_full_adaboost(sc, y, X, T=10, repartition=False, quiet=True):
+    return _run_adtree(sc, y, X, full_greedy_split, adaboost_update, T, repartition, quiet)
 
 
-def run_adtree_logitboost(sc, y, X, T=10, quiet=True):
-    return _run_adtree(sc, y, X, logitboost_update, T, quiet)
+def run_adtree_adaboost(sc, y, X, T=10, repartition=False, quiet=True):
+    return _run_adtree(sc, y, X, partition_greedy_split, adaboost_update, T, repartition, quiet)
+
+
+def run_adtree_logitboost(sc, y, X, T=10, repartition=False, quiet=True):
+    return _run_adtree(sc, y, X, partition_greedy_split, logitboost_update, T, repartition, quiet)
