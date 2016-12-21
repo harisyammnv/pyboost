@@ -10,7 +10,7 @@ from conditions import ThresholdCondition
 from utils import safe_comp
 
 
-def find_best_split(insts, index):
+def find_best_split(insts, index, bc_nodes, root_index, loss_func):
     min_score = inf
     r_node = None
     r_threshold = None
@@ -93,7 +93,7 @@ def partition_greedy_split(sc, nodes, instances, loss_func,
 
     def pgs_find_best_split(data):
         index, insts = data
-        return find_best_split(index, insts)
+        return find_best_split(insts, index, bc_nodes, root_index, loss_func)
 
     if repartition:
         instances = instances.repartition(feature_size)
@@ -128,7 +128,7 @@ def full_greedy_split(sc, nodes, instances, loss_func, repartition=False, root_i
     splits = []
     for idx in range(feature_size):
         insts = sorted(list(map(lambda (y, X, w): (y, X[idx], X, w), data)), key=itemgetter(1))
-        splits.append(find_best_split(insts, idx))
+        splits.append(find_best_split(insts, idx, bc_nodes, root_index, loss_func))
     min_score, (best_node, best_onleft, best_cond) = min(splits, key=itemgetter(0))
     if not quiet:
         print "Min score:", min_score
