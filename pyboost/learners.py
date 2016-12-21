@@ -174,11 +174,10 @@ def full_greedy_split(sc, nodes, instances, loss_func, repartition=False, root_i
 
         return (min_score, (r_node, r_onleft, ThresholdCondition(index, r_threshold)))
 
+    data = instances.collect()
     splits = []
     for idx in range(feature_size):
-        insts = (
-            instances.map(lambda (y, X, w): (y, X[idx], X, w)).sortBy(itemgetter(1)).collect()
-        )
+        insts = sorted(list(map(lambda (y, X, w): (y, X[idx], X, w), data)), key=itemgetter(1))
         splits.append(fgs_find_best_split(insts, idx))
     min_score, (best_node, best_onleft, best_cond) = min(splits, key=itemgetter(0))
     if not quiet:
